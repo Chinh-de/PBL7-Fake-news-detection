@@ -7,8 +7,18 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from retrievers.bing_news_seach import search_news
 from retrievers.bm25_matcher import retrieve_demonstrations, load_news_corpus 
+from retrievers.wiki_agent import extract_and_summarize
+from models.llm_handler import set_llm, GeminiLLM, MockLLM
 
 def test_demonstration_retrieval():
+    # Setup LLM for extraction test
+    if os.environ.get("GEMINI_API_KEY"):
+        print("LLM: Gemini (Found API Key)")
+        set_llm(GeminiLLM())
+    else:
+        print("LLM: Mock (No API Key found)")
+        set_llm(MockLLM())
+
     query = "AI dominated programmers"
     print(f"Testing retrieval for query: '{query}'")
     
@@ -37,3 +47,10 @@ def test_demonstration_retrieval():
 
 if __name__ == "__main__":
     test_demonstration_retrieval()
+
+    # 3. Knowledge Retrieval (Wiki Agent)
+    print("\n--- Testing Knowledge Retrieval (Wiki Agent) ---")
+    query = "Donald Trump elected as president in 2016"
+    knowledge_dict = extract_and_summarize(query)
+    print("Knowledge Extraction Results:")
+    print(json.dumps(knowledge_dict, indent=2, ensure_ascii=False))

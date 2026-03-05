@@ -2,6 +2,7 @@
 
 from models.llm_handler import BaseLLM, GeminiLLM
 from models.slm_handler import DummySLM
+from retrievers.pseudo_labels import REAL_NEWS_LABELS, FAKE_NEWS_LABELS
 
 CONFIDENCE_THRESHOLD = 0.8
 
@@ -26,12 +27,14 @@ INSTRUCTIONS:
 Classify the following news article as "Real" (0) or "Fake" (1).
 Use the provided knowledge and the style of the examples below to make your decision.
 
+Possible labels used in examples for "Real" news: {', '.join(REAL_NEWS_LABELS[:5])}, etc.
+Possible labels used in examples for "Fake" news: {', '.join(FAKE_NEWS_LABELS[:5])}, etc.
+
 EXAMPLES:
 """
     for i, demo in enumerate(demonstrations_D):
-        # Convert label to 0/1 for consistent examples in prompt if needed, 
-        # or keep text if LLM understands better. 
-        # Mapping: Authentic/Real/Reliable -> 0, Hoax/Fake/Dubious -> 1
+        # The label in demo might be a random pseudo-label (e.g. "Authentic")
+        # We present it as is to force LLM to understand the semantic meaning.
         label_str = demo.get('label', 'Unknown')
         prompt += f"\nExample {i+1}:\nText: {demo.get('text', '')[:200]}...\nLabel: {label_str}\n"
 
@@ -111,7 +114,7 @@ def run_selection_pipeline(text_x, demonstrations_D, knowledge_K, llm: BaseLLM =
         "category": category
     }
 
-def split_data(dataset):
-    """Return D_clean and D_noisy from dataset. THIS IS LEGACY/PLACEHOLDER."""
-    # This was the old placeholder. For now, just return empty lists as we use the pipeline above.
-    return [], []
+# def split_data(dataset):
+#     """Return D_clean and D_noisy from dataset. THIS IS LEGACY/PLACEHOLDER."""
+#     # This was the old placeholder. For now, just return empty lists as we use the pipeline above.
+#     return [], []

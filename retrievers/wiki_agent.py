@@ -1,12 +1,18 @@
 import sys
 import os
 import json
+import re
 
 # Add parent dir to sys.path to allow importing from sibling directories when running as script
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from models.llm_handler import call_llm
-import wikipedia
+
+try:
+    import wikipedia
+except ImportError:
+    wikipedia = None
+    print("Warning: wikipedia module not found. Install with `pip install wikipedia`")
 
 """LLM agent for extracting entities and querying Wikipedia."""
 
@@ -16,15 +22,7 @@ def extract_entities(text: str) -> list[dict]:
     Extract key entities from text using the configured LLM, along with their likely Wikipedia language.
     Returns a list of dicts: [{'entity': 'Name', 'lang': 'vi'}, ...]
     """
-    # prompt = (
-    #     f"Identify the most important named entities (People, Organizations, Locations, Events, Concepts) "
-    #     f"in the text below that are likely to have a Wikipedia page. "
-    #     f"For each entity, determine the most appropriate Wikipedia language code (e.g., 'en', 'vi', 'fr'). "
-    #     f"Return ONLY a valid JSON array of objects, where each object has 'entity' and 'lang' keys. "
-    #     f"Do not include any explanations or markdown formatting outside the JSON.\n\n"
-    #     f"Text: \"{text}\"\n\n"
-    #     f"JSON:"
-    # )
+   
     prompt = (
     f"You are a knowledge extraction agent for a fact-checking system. "
     f"Identify the top 1 to 4 most important named entities (People, Organizations, Locations, Events) "
@@ -36,12 +34,18 @@ def extract_entities(text: str) -> list[dict]:
     f"[{{\"entity\": \"Germanwings\", \"lang\": \"en\"}}, {{\"entity\": \"French Alps\", \"lang\": \"en\"}}]\n\n"
     f"Text: \"{text}\"\n\n"
     f"JSON:"
-)
+    )
     
     try:
         response = call_llm(prompt)
         # Attempt to clean potential markdown wrappers
         clean_response = response.replace("```json", "").replace("```", "").strip()
+        
+        # Use regex to find the JSON array part if there's extra text
+        match = re.search(r'\[.*\]', clean_response, re.DOTALL)
+        if match:
+            clean_response = match.group(0)
+            
         entities = json.loads(clean_response)
         
         # Ensure it's a list of dicts
@@ -55,6 +59,9 @@ def extract_entities(text: str) -> list[dict]:
 
 def query_wikipedia(entity: str, lang: str = "en") -> str:
     """Query Wikipedia for a summary of the entity."""
+    if wikipedia is None:
+        return "Wikipedia module not available."
+        
     try:
         wikipedia.set_lang(lang)
         summary = wikipedia.summary(entity)
@@ -85,7 +92,7 @@ def extract_and_summarize(text: str) -> dict[str, str]:
         summary = query_wikipedia(entity, lang=lang)
 
         # bỏ qua not found
-        if not summary or summary == "Not found":
+        if not summary or summary == "Not found" or "Error" in summary:
             continue
 
         raw_results.append((entity, summary.strip()))
@@ -107,22 +114,3 @@ def extract_and_summarize(text: str) -> dict[str, str]:
         merged_results[merged_key] = summary_text
 
     return merged_results
-    
-    
-if __name__ == "__main__":
-    # Test case
-    test_text = "Tesla announced a new battery factory in Berlin, strengthening cooperation with the Technical University of Munich to advance AI-driven energy storage research in Germany."
-    
-    # Setup Gemini LLM for testing
-    from models.llm_handler import set_llm, GeminiLLM
-    # Assumes GEMINI_API_KEY is set in .env or environment
-    set_llm(GeminiLLM())
-    
-    try:
-        results = extract_and_summarize(test_text)
-        for entity, summary in results.items():
-            print(f"--- {entity} ---")
-            print(summary)
-            print()
-    except Exception as e:
-        print(f"Test failed (likely due to missing LLM config): {e}")

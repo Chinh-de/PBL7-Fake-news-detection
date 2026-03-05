@@ -20,15 +20,30 @@ class MRCDPipeline:
             set_llm(MockLLM())
             print("LLM: Mock (Random Response)")
 
+    def _generate_search_query(self, text_x):
+        """Use LLM to generate a focused search query."""
+        try:
+            llm = get_llm()
+            prompt = (
+                f"Generate a concise search query (5-10 words) to verify the following news event using a search engine.\n"
+                f"Event: \"{text_x}\"\n"
+                f"Query:"
+            )
+            query = llm.generate_text(prompt).strip().strip('"')
+            return query
+        except Exception as e:
+            print(f"Query generation failed: {e}. Fallback to simple split.")
+            return " ".join(text_x.split()[:10])
+
     def retrieve_context_step_1(self, text_x):
         """Step 1: Retrieval & Pseudo-labeling (Gear 1, 2, 3)"""
         print(f"\n--- Step 1: Retrieval & Context for: '{text_x[:50]}...' ---")
         
         # Gear 1: Demonstration Retrieval (Bing + BM25)
-        # In a real scenario, we might use the text_x as query or extract keywords
-        # For simplicity, using first few words as query
-        query = " ".join(text_x.split()[:10]) 
-        print(f"Searching Bing for: '{query}'")
+        # Use LLM to generate a smart search query
+        query = self._generate_search_query(text_x)
+        print(f"Generated Search Query: '{query}'")
+        
         try:
             bing_news_strings = search_news(query, max_results=5)
             bing_news_items = [{"content": s, "source": "bing"} for s in bing_news_strings]
@@ -46,8 +61,13 @@ class MRCDPipeline:
         
         try:
             knowledge_dict = extract_and_summarize(text_x)
-            knowledge_texts = [f"{entities}: {summary}" for entities, summary in knowledge_dict.items()]
-            knowledge_K = "\n".join(knowledge_texts) if knowledge_texts else "No specific knowledge found."
+            if knowledge_dict:
+                knowledge_texts = []
+                for entities, summary in knowledge_dict.items():
+                    knowledge_texts.append(f"Entity(s) [{entities}]: {summary}")
+                knowledge_K = "\n\n".join(knowledge_texts)
+            else:
+                knowledge_K = "No specific entities found or validated in Wikipedia."
         except Exception as e:
             print(f"Knowledge Retrieval failed: {e}")
             knowledge_K = "Knowledge retrieval error."
